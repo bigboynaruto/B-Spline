@@ -1,10 +1,8 @@
-from __future__ import division, print_function
+from __future__ import division
 
 import numpy as np
 import matplotlib.pyplot as plt
 from functools import reduce
-from sympy import *
-from sympy.utilities.lambdify import lambdify
 
 class Interval(object):
     """Numeric interval [a,b].
@@ -67,31 +65,30 @@ class BSpline(object):
         U = [(i+1) / (self.n-self.p) for i in range(self.n-self.p-1)]
         self.U = np.concatenate([np.zeros(self.p+1), U, np.full(self.p+1, 1)])
 
-    def _Nij(self,u,N,i,j):
+    def _Nij(self,N,i,j):
         U = self.U
-        if N[i] == 0 and N[i+1] == 0:
-            return 0
-        elif N[i] == 0:
-            return N[i+1]*(U[i+j+1]-u)/(U[i+j+1]-U[i+1])
-        elif N[i+1] == 0:
-            return N[i]*(u-U[i])/(U[i+j]-U[i])
-        return N[i]*(u-U[i])/(U[i+j]-U[i]) + N[i+1]*(U[i+j+1]-u)/(U[i+j+1]-U[i+1])
+        z = np.zeros(1)
+        if all(N[i] == z) and all(N[i+1] == z):
+            return z
+        elif all(N[i] == z):
+            return np.polymul(N[i+1], [-1, U[i+j+1]])/(U[i+j+1]-U[i+1])
+        elif all(N[i+1] == z):
+            return np.polymul(N[i], [1, -U[i]])/(U[i+j]-U[i])
+        return np.polyadd(np.polymul(N[i], [1, -U[i]]) / (U[i+j]-U[i]), np.polymul(N[i+1], [-1, U[i+j+1]])/(U[i+j+1]-U[i+1]))
 
     def _gen_N(self):
-        u = Symbol('u', rational=True)
         self.N = {}
         for i in (i for i in range(len(self.U)-1) if self.U[i] != self.U[i+1]):
-            currN = np.zeros(len(self.U)-1)
-            currN[i] = 1
+            currN = np.zeros(len(self.U)-1).reshape((len(self.U)-1, 1))
+            currN[i] = [1]
             for j in range(1,self.p+1):
-                currN = [self._Nij(u,currN,i,j) for i in range(len(currN)-1)]
+                currN = [self._Nij(currN,i,j) for i in range(len(currN)-1)]
             self.N[Interval(self.U[i], self.U[i+1])] = currN
 
     def _gen_C(self):
         self.C = {}
-        u = Symbol('u', rational=True)
         for i,v in self.N.items():
-            self.C[i] = [lambdify(u,f,modules='numpy') for f in np.dot(v,self.points)]
+            self.C[i] = [reduce(np.polyadd, (np.polymul(p,x[j]) for p,x in zip(v,self.points))) for j in range(len(self.points[0]))]
 
     def eval2d(self,u):
         return self.evalx(u),self.evaly(u)
@@ -102,13 +99,13 @@ class BSpline(object):
     def evalx(self,u):
         for i,c in self.C.items():
             if u in i:
-                return c[0](u)
+                return np.polyval(c[0], u)
         return 0
 
     def evaly(self,u):
         for i,c in self.C.items():
             if u in i:
-                return c[1](u)
+                return np.polyval(c[1], u)
         return 0
 
     def evalz(self,u):
@@ -116,7 +113,7 @@ class BSpline(object):
             return 0
         for i,c in self.C.items():
             if u in i:
-                return c[2](u)
+                return np.polyval(c[2], u)
         return 0
 
     """x-values of control points."""
@@ -166,15 +163,14 @@ class OpenBSpline(BSpline):
         self.U = np.array([i / (self.m-1) for i in range(self.m)])
 
     def _gen_N(self):
-        u = Symbol('u', rational=True)
         self.N = {}
         for i in (i for i in range(len(self.U)-1) if self.U[i] != self.U[i+1]):
             if i < self.p or i >= len(self.U) - self.p:
                 continue
-            currN = np.zeros(len(self.U)-1)
-            currN[i] = 1
+            currN = np.zeros(len(self.U)-1).reshape((len(self.U)-1, 1))
+            currN[i] = [1]
             for j in range(1,self.p+1):
-                currN = [self._Nij(u,currN,i,j) for i in range(len(currN)-1)]
+                currN = [self._Nij(currN,i,j) for i in range(len(currN)-1)]
             self.N[Interval(self.U[i], self.U[i+1])] = currN
 
     @property
