@@ -1,6 +1,7 @@
 from __future__ import division
 
 import numpy as np
+from numpy.polynomial.polynomial import polyval2d,polygrid2d
 import matplotlib.pyplot as plt
 from functools import reduce
 
@@ -22,6 +23,13 @@ class Interval(object):
     def __contains__(self,x):
         return self.a <= x <= self.b
 
+    def __getitem__(self,i):
+        if i == 0:
+            return self.a
+        if i == 1:
+            return self.b
+        raise IndexError
+
     def __eq__(self,another):
         return self.a == another.a and self.b == another.b
 
@@ -29,7 +37,7 @@ class Interval(object):
         return x < self.a
 
     def __gt__(self,x):
-        return x > self.a
+        return x > self.b
 
     def __hash__(self):
         return hash(str(self))
@@ -55,18 +63,21 @@ class BSpline(object):
         assert(2 <= len(points))
         assert(0 <= p and p <= len(points)-1)
 
-        self.points = points
+        self.points = np.asarray(points)
         self.p = p
-        self._gen_U()
-        self._gen_N()
-        self._gen_C()
 
-    def _gen_U(self):
-        U = [(i+1) / (self.n-self.p) for i in range(self.n-self.p-1)]
-        self.U = np.concatenate([np.zeros(self.p+1), U, np.full(self.p+1, 1)])
+        self.U = self._uniform_knots(self.n, self.p)
+        self.N = self._basis(self.U, self.p)
 
-    def _Nij(self,N,i,j):
-        U = self.U
+        self.C = {}
+        for i,v in self.N.items():
+            self.C[i] = [reduce(np.polyadd, (np.polymul(p,x[j]) for p,x in zip(v,self.points))) for j in range(len(self.points[0]))]
+
+    def _uniform_knots(self,n,p):
+        U = [(i+1) / (n-p) for i in range(n-p-1)]
+        return np.concatenate([np.zeros(p+1), U, np.full(p+1, 1)])
+
+    def _Nij(self,N,i,j,U):
         z = np.zeros(1)
         if all(N[i] == z) and all(N[i+1] == z):
             return z
@@ -76,45 +87,43 @@ class BSpline(object):
             return np.polymul(N[i], [1, -U[i]])/(U[i+j]-U[i])
         return np.polyadd(np.polymul(N[i], [1, -U[i]]) / (U[i+j]-U[i]), np.polymul(N[i+1], [-1, U[i+j+1]])/(U[i+j+1]-U[i+1]))
 
-    def _gen_N(self):
-        self.N = {}
-        for i in (i for i in range(len(self.U)-1) if self.U[i] != self.U[i+1]):
-            currN = np.zeros(len(self.U)-1).reshape((len(self.U)-1, 1))
-            currN[i] = [1]
-            for j in range(1,self.p+1):
-                currN = [self._Nij(currN,i,j) for i in range(len(currN)-1)]
-            self.N[Interval(self.U[i], self.U[i+1])] = currN
+    def _basis(self,U,p):
+        res = {}
+        for i in (i for i in range(len(U)-1) if U[i] != U[i+1]):
+            N = [0]*(len(U)-1)
+            N[i] = 1
+            for j in range(1,p+1):
+                N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
+            res[Interval(U[i], U[i+1])] = N
+        return res
 
-    def _gen_C(self):
-        self.C = {}
-        for i,v in self.N.items():
-            self.C[i] = [reduce(np.polyadd, (np.polymul(p,x[j]) for p,x in zip(v,self.points))) for j in range(len(self.points[0]))]
+    def _find_interval(self,u):
+        for i,c in self.C.items():
+            if u in i:
+                return c
+        raise Exception
 
     def eval2d(self,u):
-        return self.evalx(u),self.evaly(u)
+        f = self._find_interval(u)
+        return tuple(np.polyval(c,u) for c in f[:2])
 
     def eval(self,u):
-        return self.evalx(u),self.evaly(u),self.evalz(u)
+        f = self._find_interval(u)
+        return tuple(np.polyval(c,u) for c in f)
 
     def evalx(self,u):
-        for i,c in self.C.items():
-            if u in i:
-                return np.polyval(c[0], u)
-        return 0
+        f = self._find_interval(u)
+        return np.polyval(f[0],u)
 
     def evaly(self,u):
-        for i,c in self.C.items():
-            if u in i:
-                return np.polyval(c[1], u)
-        return 0
+        f = self._find_interval(u)
+        return np.polyval(f[1],u)
 
     def evalz(self,u):
-        if (len(self.points[0]) < 3):
-            return 0
-        for i,c in self.C.items():
-            if u in i:
-                return np.polyval(c[2], u)
-        return 0
+        #if (len(self.points[0]) < 3):
+        #    return 0
+        f = self._find_interval(u)
+        return np.polyval(f[2],u)
 
     """x-values of control points."""
     @property
@@ -136,7 +145,7 @@ class BSpline(object):
     """B-Spline parameter domain."""
     @property
     def domain(self):
-        return np.min(self.U),np.max(self.U)
+        return Interval(np.min(self.U),np.max(self.U))
 
     """Number of points."""
     @property
@@ -148,10 +157,10 @@ class BSpline(object):
     def m(self):
         return self.n + self.p + 1
 
-    """Knots used in evaluation."""
+    """Knots."""
     @property
     def knots(self):
-        return self.U
+        return np.unique(self.U)
 
 
 class OpenBSpline(BSpline):
@@ -159,30 +168,138 @@ class OpenBSpline(BSpline):
     def __init__(self,points,p):
         super(OpenBSpline, self).__init__(points,p)
 
-    def _gen_U(self):
-        self.U = np.array([i / (self.m-1) for i in range(self.m)])
+    def _uniform_knots(self,n,p):
+        return np.asarray([i / (n+p) for i in range(n+p+1)])
 
-    def _gen_N(self):
-        self.N = {}
-        for i in (i for i in range(len(self.U)-1) if self.U[i] != self.U[i+1]):
-            if i < self.p or i >= len(self.U) - self.p:
-                continue
-            currN = np.zeros(len(self.U)-1).reshape((len(self.U)-1, 1))
-            currN[i] = [1]
-            for j in range(1,self.p+1):
-                currN = [self._Nij(currN,i,j) for i in range(len(currN)-1)]
-            self.N[Interval(self.U[i], self.U[i+1])] = currN
+    def _basis(self,U,p):
+        res = {}
+        for i in (i for i in range(len(U)-1) if p <= i < len(U) - p and U[i] != U[i+1]):
+            N = [0]*(len(U)-1)
+            N[i] = 1
+            for j in range(1,p+1):
+                N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
+            res[Interval(U[i], U[i+1])] = N
+        return res
 
     @property
     def domain(self):
-        return self.U[self.p],self.U[self.m-self.p-1]
+        return Interval(self.U[self.p],self.U[self.m-self.p-1])
 
     @property
     def knots(self):
-        return np.unique(self.U[self.p:self.m-self.p])
+        return np.unique(self.U[self.p:self.n+1])
 
 class ClosedBSpline(OpenBSpline):
     """Closed b-spline with joined start and end."""
     def __init__(self,points,p):
         points.extend(points[:p])
         super(ClosedBSpline, self).__init__(points,p)
+
+class BSplineSurface(BSpline):
+    """Clamped b-spline surface."""
+    def __init__(self,points,p,q):
+        assert(0 <= p <= len(points) - 1)
+        assert(0 <= q <= len(points[0]) - 1)
+
+        self.points = np.asarray(points)
+        self.p = p
+        self.q = q
+
+        self.U = self._uniform_knots(self.n, p)
+        self.V = self._uniform_knots(self.l, q)
+
+        self.N = self._basis(self.U, p)
+        self.M = self._basis(self.V, q)
+
+        self.C = {}
+        for i1,N in self.N.items():
+            for i2,M in self.M.items():
+                C = np.zeros((self.n,self.l,3))
+                for pu in range(len(N)):
+                    for pv in range(len(M)):
+                        n,l = len(N[pu]),len(M[pv])
+                        for i in range(n):
+                            for j in range(l):
+                                C[n-i-1,l-j-1] += N[pu][i] * M[pv][j] * self.points[pu][pv]
+                self.C[i1,i2] = C
+
+    def _find_interval(self,u,v):
+        for i,c in self.C.items():
+            if u in i[0] and v in i[1]:
+                return c
+        raise Exception
+
+    def eval(self,u,v):
+        c = self._find_interval(u,v)
+        return tuple(polyval2d(u,v,c))
+
+    def eval2d(self,u,v):
+        c = self._find_interval(u, v)
+        return tuple(polyval2d(u,v,np.asarray([[[i[0],i[1]] for i in j] for j in c])))
+
+    def evalx(self,u,v):
+        c = self._find_interval(u, v)
+        return polyval2d(u,v,[[i[0] for i in j] for j in c])
+
+    def evaly(self,u,v):
+        c = self._find_interval(u, v)
+        return polyval2d(u,v,[[i[1] for i in j] for j in c])
+
+    def evalz(self,u,v):
+        c = self._find_interval(u, v)
+        return polyval2d(u,v,[[i[2] for i in j] for j in c])
+
+    """x-values of control points."""
+    @property
+    def X(self):
+        return [[x[0] for x in xx] for xx in self.points]
+
+    """y-values of control points."""
+    @property
+    def Y(self):
+        return [[x[1] for x in xx] for xx in self.points]
+
+    """z-values of control points."""
+    @property
+    def Z(self):
+        return [[x[2] for x in xx] for xx in self.points]
+
+    """B-Spline parameter domain."""
+    @property
+    def domain(self):
+        return Interval(np.min(self.U),np.max(self.U)),Interval(np.min(self.V),np.max(self.V))
+
+    """Number of points."""
+    @property
+    def l(self):
+        return len(self.points[0])
+
+    """Number of knots."""
+    @property
+    def k(self):
+        return self.l + self.q + 1
+
+    """Knots."""
+    @property
+    def knots(self):
+        return self.U,self.V
+
+class OpenBSplineSurface(OpenBSpline,BSplineSurface):
+    """Open b-spline surface doesn't touch first and last lines in grid."""
+    def __init__(self,points,p,q):
+        super(OpenBSpline, self).__init__(points,p,q)
+
+    @property
+    def domain(self):
+        return Interval(self.U[self.p],self.U[self.n]),Interval(self.V[self.q],self.V[self.l])
+
+    @property
+    def knots(self):
+        return np.unique(self.U[self.p:self.n+1]),np.unique(self.V[self.q:self.l+1])
+
+class ClosedBSplineSurface(OpenBSplineSurface):
+    """Closed b-spline surface with joined start and end."""
+    def __init__(self,points,p,q):
+        points =[ps + ps[:p] for ps in points]
+        points.extend(points[:p])
+        super(ClosedBSplineSurface, self).__init__(points,p,q)
