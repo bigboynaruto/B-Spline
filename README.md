@@ -5,3 +5,5 @@ B-Spline implementation on Python
 - [x] 3D curve
 - [x] 3D surface
 - [ ] Python2 compatibility
+## FIX
+- [ ] 0-degree surface
