@@ -70,8 +70,8 @@ class BSpline(object):
         self.N = self._basis(self.U, self.p)
 
         self.C = {}
-        for i,v in self.N.items():
-            self.C[i] = [reduce(np.polyadd, (np.polymul(p,x[j]) for p,x in zip(v,self.points))) for j in range(len(self.points[0]))]
+        for i,poly in self.N.items():
+            self.C[i] = [reduce(np.polyadd, (np.polymul(p,c) for p,c in zip(poly,coord))) for coord in np.transpose(self.points)]
 
     def _uniform_knots(self,n,p):
         U = [(i+1) / (n-p) for i in range(n-p-1)]
@@ -94,7 +94,7 @@ class BSpline(object):
             N[i] = 1
             for j in range(1,p+1):
                 N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
-            res[Interval(U[i], U[i+1])] = N
+            res[Interval(U[i], U[i+1])] = np.asarray(N)
         return res
 
     def _find_interval(self,u):
