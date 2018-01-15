@@ -20,15 +20,20 @@ class Interval(object):
         self.a = a
         self.b = b
 
+    def linspace(self,n):
+        return np.linspace(self.a, self.b, n)
+
     def __contains__(self,x):
         return self.a <= x <= self.b
 
+    '''
     def __getitem__(self,i):
         if i == 0:
             return self.a
         if i == 1:
             return self.b
         raise IndexError
+    '''
 
     def __eq__(self,another):
         return self.a == another.a and self.b == another.b
@@ -213,8 +218,9 @@ class BSplineSurface(BSpline):
 
         self.C = {}
         for i1,N in self.N.items():
+            C = {}
             for i2,M in self.M.items():
-                C = np.zeros((self.n,self.l,3))
+                _C = np.zeros((self.n,self.l,3))
 
                 for us,ps in zip(N,self.points):
                     for vs,p in zip(M,ps):
@@ -222,13 +228,16 @@ class BSplineSurface(BSpline):
 
                         for i,u in zip(range(n-1,-1,-1),us):
                             for j,v in zip(range(l-1,-1,-1),vs):
-                                C[i,j] += u * v * p
-                self.C[i1,i2] = C
+                                _C[i,j] += u * v * p
+                C[i2] = _C
+            self.C[i1] = C
 
     def _find_interval(self,u,v):
-        for i,c in self.C.items():
-            if u in i[0] and v in i[1]:
-                return c
+        for i1,C in self.C.items():
+            if u in i1:
+                for i2,c in C.items():
+                    if v in i2:
+                        return c
         raise Exception
 
     def eval(self,u,v):
@@ -303,6 +312,6 @@ class OpenBSplineSurface(OpenBSpline,BSplineSurface):
 class ClosedBSplineSurface(OpenBSplineSurface):
     """Closed b-spline surface with joined start and end."""
     def __init__(self,points,p,q):
-        points =[ps + ps[:p] for ps in points]
+        points =[ps + ps[:q] for ps in points]
         points.extend(points[:p])
         super(ClosedBSplineSurface, self).__init__(points,p,q)

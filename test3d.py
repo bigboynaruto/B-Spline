@@ -5,7 +5,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from bspline import *
 
 def plot(bs,ax,i,j):
-    domain = np.linspace(*bs.domain,1000)
+    domain = bs.domain.linspace(1000)
     eval = np.vectorize(bs.eval)
 
     ax[i,j].plot(bs.X, bs.Y, bs.Z, linestyle='dashed', marker='o', label='control points')

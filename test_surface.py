@@ -9,7 +9,7 @@ def plot(bss):
     ax = fig.gca(projection='3d')
 
     d1,d2 = bss.domain
-    u,v = np.linspace(d1[0],d1[1],50),np.linspace(d2[0],d2[1],50)
+    u,v = d1.linspace(50),d2.linspace(50)
     eval = np.vectorize(bss.eval)
 
     u,v = np.meshgrid(u,v)

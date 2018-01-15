@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from bspline import *
 
 def plot(bs,ax,i,j):
-    domain = np.linspace(*bs.domain,1000)
+    domain = bs.domain.linspace(1000)
     eval = np.vectorize(bs.eval2d)
 
     pl1 = ax[i,j].plot(bs.X, bs.Y, linestyle='dashed', marker='o', label='control points')
