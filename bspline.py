@@ -215,12 +215,14 @@ class BSplineSurface(BSpline):
         for i1,N in self.N.items():
             for i2,M in self.M.items():
                 C = np.zeros((self.n,self.l,3))
-                for pu in range(len(N)):
-                    for pv in range(len(M)):
-                        n,l = len(N[pu]),len(M[pv])
-                        for i in range(n):
-                            for j in range(l):
-                                C[n-i-1,l-j-1] += N[pu][i] * M[pv][j] * self.points[pu][pv]
+
+                for us,ps in zip(N,self.points):
+                    for vs,p in zip(M,ps):
+                        n,l = len(us),len(vs)
+
+                        for i,u in zip(range(n-1,-1,-1),us):
+                            for j,v in zip(range(l-1,-1,-1),vs):
+                                C[i,j] += u * v * p
                 self.C[i1,i2] = C
 
     def _find_interval(self,u,v):
@@ -233,6 +235,7 @@ class BSplineSurface(BSpline):
         c = self._find_interval(u,v)
         return tuple(polyval2d(u,v,c))
 
+    # useless function
     def eval2d(self,u,v):
         c = self._find_interval(u, v)
         return tuple(polyval2d(u,v,np.asarray([[[i[0],i[1]] for i in j] for j in c])))
