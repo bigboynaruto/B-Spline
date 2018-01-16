@@ -26,15 +26,6 @@ class Interval(object):
     def __contains__(self,x):
         return self.a <= x <= self.b
 
-    '''
-    def __getitem__(self,i):
-        if i == 0:
-            return self.a
-        if i == 1:
-            return self.b
-        raise IndexError
-    '''
-
     def __eq__(self,another):
         return self.a == another.a and self.b == another.b
 
@@ -83,26 +74,21 @@ class BSpline(object):
         return np.concatenate([np.zeros(p+1), U, np.full(p+1, 1)])
 
     def _Nij(self,N,i,j,U):
-        z = np.zeros(1)
-        if all(N[i] == z) and all(N[i+1] == z):
-            return z
-        elif all(N[i] == z):
+        if not np.any(N[i]) and not np.any(N[i+1]):
+            return [0]
+        elif not np.any(N[i]):
             return np.polymul(N[i+1], [-1, U[i+j+1]])/(U[i+j+1]-U[i+1])
-        elif all(N[i+1] == z):
+        elif not np.any(N[i+1]):
             return np.polymul(N[i], [1, -U[i]])/(U[i+j]-U[i])
         return np.polyadd(np.polymul(N[i], [1, -U[i]]) / (U[i+j]-U[i]), np.polymul(N[i+1], [-1, U[i+j+1]])/(U[i+j+1]-U[i+1]))
 
     def _basis(self,U,p):
         res = {}
         for i in (i for i in range(len(U)-1) if U[i] != U[i+1]):
-            if p == 0:
-                N = np.zeros(len(U)-1).reshape((len(U)-1,1))
-                N[i] = [1]
-            else:
-                N = [0]*(len(U)-1)
-                N[i] = 1
-                for j in range(1,p+1):
-                    N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
+            N = [[0] for i in range(len(U)-1)]
+            N[i][0] = 1
+            for j in range(1,p+1):
+                N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
             res[Interval(U[i], U[i+1])] = np.asarray(N)
         return res
 
@@ -184,14 +170,10 @@ class OpenBSpline(BSpline):
     def _basis(self,U,p):
         res = {}
         for i in (i for i in range(len(U)-1) if p <= i < len(U) - p and U[i] != U[i+1]):
-            if p == 0:
-                N = np.zeros(len(U)-1).reshape((len(U)-1,1))
-                N[i] = [1]
-            else:
-                N = [0]*(len(U)-1)
-                N[i] = 1
-                for j in range(1,p+1):
-                    N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
+            N = [[0] for i in range(len(U)-1)]
+            N[i][0] = 1
+            for j in range(1,p+1):
+                N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
             res[Interval(U[i], U[i+1])] = np.asarray(N)
         return res
 
