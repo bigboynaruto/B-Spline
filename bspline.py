@@ -36,7 +36,7 @@ class Interval(object):
         return x > self.b
 
     def __hash__(self):
-        return hash(str(self))
+        return hash((self.a,self.b))
 
     def __str__(self):
         return '[%f,%f]' % (self.a,self.b)
@@ -284,10 +284,10 @@ class BSplineSurface(BSpline):
     def knots(self):
         return np.unique(self.U),np.unique(self.V)
 
-class OpenBSplineSurface(OpenBSpline,BSplineSurface):
+class OpenBSplineSurface(BSplineSurface,OpenBSpline):
     """Open b-spline surface doesn't touch first and last lines in grid."""
     def __init__(self,points,p,q):
-        super(OpenBSpline, self).__init__(points,p,q)
+        super(OpenBSplineSurface, self).__init__(points,p,q)
 
     @property
     def knots(self):
