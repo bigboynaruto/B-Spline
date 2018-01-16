@@ -95,10 +95,14 @@ class BSpline(object):
     def _basis(self,U,p):
         res = {}
         for i in (i for i in range(len(U)-1) if U[i] != U[i+1]):
-            N = [0]*(len(U)-1)
-            N[i] = 1
-            for j in range(1,p+1):
-                N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
+            if p == 0:
+                N = np.zeros(len(U)-1).reshape((len(U)-1,1))
+                N[i] = [1]
+            else:
+                N = [0]*(len(U)-1)
+                N[i] = 1
+                for j in range(1,p+1):
+                    N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
             res[Interval(U[i], U[i+1])] = np.asarray(N)
         return res
 
@@ -150,7 +154,8 @@ class BSpline(object):
     """B-Spline parameter domain."""
     @property
     def domain(self):
-        return Interval(np.min(self.U),np.max(self.U))
+        U = self.knots
+        return Interval(np.min(U),np.max(U))
 
     """Number of points."""
     @property
@@ -179,16 +184,16 @@ class OpenBSpline(BSpline):
     def _basis(self,U,p):
         res = {}
         for i in (i for i in range(len(U)-1) if p <= i < len(U) - p and U[i] != U[i+1]):
-            N = [0]*(len(U)-1)
-            N[i] = 1
-            for j in range(1,p+1):
-                N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
-            res[Interval(U[i], U[i+1])] = N
+            if p == 0:
+                N = np.zeros(len(U)-1).reshape((len(U)-1,1))
+                N[i] = [1]
+            else:
+                N = [0]*(len(U)-1)
+                N[i] = 1
+                for j in range(1,p+1):
+                    N[:] = [self._Nij(N,i,j,U) for i in range(len(N)-1)]
+            res[Interval(U[i], U[i+1])] = np.asarray(N)
         return res
-
-    @property
-    def domain(self):
-        return Interval(self.U[self.p],self.U[self.m-self.p-1])
 
     @property
     def knots(self):
@@ -279,7 +284,8 @@ class BSplineSurface(BSpline):
     """B-Spline parameter domain."""
     @property
     def domain(self):
-        return Interval(np.min(self.U),np.max(self.U)),Interval(np.min(self.V),np.max(self.V))
+        U,V = self.knots
+        return Interval(np.min(U),np.max(U)),Interval(np.min(V),np.max(V))
 
     """Number of points."""
     @property
@@ -294,16 +300,12 @@ class BSplineSurface(BSpline):
     """Knots."""
     @property
     def knots(self):
-        return self.U,self.V
+        return np.unique(self.U),np.unique(self.V)
 
 class OpenBSplineSurface(OpenBSpline,BSplineSurface):
     """Open b-spline surface doesn't touch first and last lines in grid."""
     def __init__(self,points,p,q):
         super(OpenBSpline, self).__init__(points,p,q)
-
-    @property
-    def domain(self):
-        return Interval(self.U[self.p],self.U[self.n]),Interval(self.V[self.q],self.V[self.l])
 
     @property
     def knots(self):
