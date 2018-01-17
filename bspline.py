@@ -5,6 +5,9 @@ from numpy.polynomial.polynomial import polyval2d,polygrid2d
 import matplotlib.pyplot as plt
 from functools import reduce
 
+def distance(p1,p2):
+    return np.sqrt(np.sum(()))
+
 class Interval(object):
     """Numeric interval [a,b].
 
@@ -213,9 +216,9 @@ class BSplineSurface(BSpline):
                     for vs,p in zip(M,ps):
                         n,l = len(us),len(vs)
 
-                        for i,u in zip(range(n-1,-1,-1),us):
-                            for j,v in zip(range(l-1,-1,-1),vs):
-                                _C[i,j] += u * v * p
+                        for i,u in enumerate(us):
+                            for j,v in enumerate(vs):
+                                _C[n-i-1,l-j-1] += u * v * p
                 C[i2] = _C
             self.C[i1] = C
 
